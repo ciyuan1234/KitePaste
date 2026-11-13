@@ -1,27 +1,5 @@
 import Foundation
-
-enum Command {
-    case watch
-    case list
-    case copy(Int)
-    case clear
-    case help
-
-    static func parse(_ args: [String]) -> Command {
-        switch args.first {
-        case "watch": return .watch
-        case "list", nil: return .list
-        case "copy":
-            guard args.count > 1, let index = Int(args[1]) else {
-                return .help
-            }
-            return .copy(index)
-        case "clear": return .clear
-        case "help", "-h", "--help": return .help
-        default: return .help
-        }
-    }
-}
+import KitePasteCore
 
 let help = """
 KitePaste —— 轻量剪贴板历史工具
@@ -37,26 +15,29 @@ KitePaste —— 轻量剪贴板历史工具
 let args = Array(CommandLine.arguments.dropFirst())
 let store = HistoryStore()
 
-switch Command.parse(args) {
-case .watch:
+switch args.first {
+case "watch":
     print("KitePaste 正在监听剪贴板... (Ctrl+C 退出)")
-    ClipboardWatcher(store: store).start()
+    ClipboardWatcher(store: store).startPolling()
 
-case .list:
+case "list", nil:
     let entries = store.load()
     if entries.isEmpty {
         print("暂无历史记录，试试 kitepaste watch")
     } else {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM-dd HH:mm"
         for (i, entry) in entries.enumerated() {
             let preview = entry.content.replacingOccurrences(of: "\n", with: "\\n")
             let prefix = preview.count > 60 ? String(preview.prefix(60)) + "…" : preview
-            let formatter = DateFormatter()
-            formatter.dateFormat = "MM-dd HH:mm"
             print("[\(i)] \(prefix)    (\(formatter.string(from: entry.timestamp)))")
         }
     }
 
-case .copy(let index):
+case "copy":
+    guard args.count > 1, let index = Int(args[1]) else {
+        print(help); break
+    }
     let entries = store.load()
     guard entries.indices.contains(index) else {
         print("错误: 没有序号为 \(index) 的记录，运行 kitepaste list 查看")
@@ -65,10 +46,10 @@ case .copy(let index):
     Clipboard.writeString(entries[index].content)
     print("已复制: \(entries[index].content.prefix(40))")
 
-case .clear:
+case "clear":
     store.clear()
     print("历史已清空")
 
-case .help:
+default:
     print(help)
 }

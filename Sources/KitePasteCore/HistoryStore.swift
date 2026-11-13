@@ -1,30 +1,42 @@
 import Foundation
 
 /// 剪贴板历史记录条目
-struct ClipEntry: Codable, Equatable {
-    let content: String
-    let timestamp: Date
+public struct ClipEntry: Codable, Equatable, Identifiable {
+    public var id: UUID { uuid }
+    public let uuid: UUID
+    public let content: String
+    public let timestamp: Date
+
+    public init(content: String, timestamp: Date = Date()) {
+        self.uuid = UUID()
+        self.content = content
+        self.timestamp = timestamp
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case uuid, content, timestamp
+    }
 }
 
 /// 负责历史的存储与读取（JSON 文件持久化）
-final class HistoryStore {
+public final class HistoryStore {
     let storageURL: URL
 
-    init() {
+    public init() {
         let dir = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".kitepaste")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         storageURL = dir.appendingPathComponent("history.json")
     }
 
-    func load() -> [ClipEntry] {
+    public func load() -> [ClipEntry] {
         guard let data = try? Data(contentsOf: storageURL) else { return [] }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return (try? decoder.decode([ClipEntry].self, from: data)) ?? []
     }
 
-    func save(_ entries: [ClipEntry]) {
+    public func save(_ entries: [ClipEntry]) {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -33,15 +45,24 @@ final class HistoryStore {
     }
 
     /// 追加一条记录（去重：与最近一条相同则跳过）
-    func append(_ content: String) {
+    public func append(_ content: String) -> Bool {
         var entries = load()
-        if entries.first?.content == content { return }
-        entries.insert(ClipEntry(content: content, timestamp: Date()), at: 0)
+        if entries.first?.content == content { return false }
+        entries.insert(ClipEntry(content: content), at: 0)
         if entries.count > 200 { entries.removeLast(entries.count - 200) }
+        save(entries)
+        return true
+    }
+
+    /// 删除指定序号的记录
+    public func remove(at index: Int) {
+        var entries = load()
+        guard entries.indices.contains(index) else { return }
+        entries.remove(at: index)
         save(entries)
     }
 
-    func clear() {
+    public func clear() {
         save([])
     }
 }
